@@ -1,0 +1,4 @@
+com\ecoair\backend\repository\AlertRepository.class
+com\ecoair\backend\controller\AlertController.class
+com\ecoair\backend\EcoAirApplication.class
+com\ecoair\backend\model\Alert.class
