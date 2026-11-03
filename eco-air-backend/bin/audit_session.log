@@ -1,0 +1,140 @@
+================================================================================
+AUDIT SESSION LOG — eco-air-backend Docker Workshop
+Fecha: 2026-10-20
+Estudiante ID: 907839
+================================================================================
+
+--- RETO 1: Construcción Multietapa ---
+
+$ docker build --build-arg STUDENT_ID="907839" -t eco-air-backend:1.0.0 .
+#0 building with "desktop-linux" instance using docker driver
+#1 [internal] load build definition from Dockerfile
+#2 [internal] load .dockerignore
+#3 [builder] FROM maven:3.9.6-eclipse-temurin-17-alpine
+#4 COPY pom.xml .
+#5 RUN mvn dependency:go-offline -B
+#6 COPY src/ ./src/
+#7 RUN mvn package -DskipTests -B
+#8 [runtime] FROM eclipse-temurin:17-jre-alpine
+#9 RUN addgroup -S sensorgroup && adduser -S -u 10001 -G sensorgroup sensor_user
+#10 COPY --from=builder /build/target/eco-air-backend.jar ./eco-air-backend.jar
+#11 RUN chown -R sensor_user:sensorgroup /app
+#17 naming to docker.io/library/eco-air-backend:1.0.0 done
+
+$ docker images eco-air-backend:1.0.0
+REPOSITORY        TAG       IMAGE ID       CREATED         SIZE
+eco-air-backend   1.0.0     128d483658e7   9 seconds ago   453MB
+
+================================================================================
+
+--- RETO 2.1: Verificación del Desacoplamiento de Capas ---
+
+$ docker history --human --format "table {{.Size}}\t{{.CreatedBy}}" eco-air-backend:1.0.0
+SIZE      CREATED BY
+0B        ENTRYPOINT ["sh" "-c" "java $JAVA_OPTS -jar …
+0B        EXPOSE [8080/tcp]
+0B        USER sensor_user
+49.5MB    RUN |1 STUDENT_ID=907839 /bin/sh -c chown -R sensor_user:sensorgroup /app
+49.5MB    COPY /build/target/eco-air-backend.jar ./eco-air-backend.jar
+8.19kB    WORKDIR /app
+0B        ENV OPERATOR_ID=907839
+0B        ENV JAVA_OPTS=-XX:+UseContainerSupport ...
+41kB      RUN |1 STUDENT_ID=907839 /bin/sh -c addgroup -S sensorgroup && adduser ...
+0B        ARG STUDENT_ID=907839
+0B        ENTRYPOINT ["/__cacert_entrypoint.sh"]
+12.3kB    COPY --chmod=755 entrypoint.sh /__cacert_entrypoint.sh
+12.3kB    RUN /bin/sh -c set -eux; echo "Verifying...
+141MB     RUN /bin/sh -c set -eux; ARCH="$(apk --print-arch)"...
+0B        ENV JAVA_VERSION=jdk-17.0.20.1+1
+44MB      RUN /bin/sh -c set -eux; apk add --no-cache ...
+0B        ENV LANG=en_US.UTF-8 LANGUAGE=en_US:en LC_ALL=en_US.UTF-8
+0B        ENV PATH=/opt/java/openjdk/bin:/usr/local/sbin:...
+0B        ENV JAVA_HOME=/opt/java/openjdk
+0B        CMD ["/bin/sh"]
+9.08MB    ADD alpine-minirootfs-3.24.2-x86_64.tar.gz /
+
+================================================================================
+
+--- RETO 2.2: Inspección del Proceso del Host ---
+
+$ docker run -d --name eco_air_active -p 8080:8080 eco-air-backend:1.0.0
+3076c221abd4f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6
+
+$ docker top eco_air_active -o pid,user,comm
+PID     USER    COMMAND
+959     10001   java
+
+================================================================================
+
+--- RETO 2.3: Test de Penetración —Inmutabilidad de Runtime ---
+
+$ docker exec eco_air_active touch /etc/crontab_fake
+touch: cannot touch '/etc/crontab_fake': Permission denied
+
+================================================================================
+
+--- RETO 2.4: Auditoría de Artefactos de Desarrollo ---
+
+$ docker exec eco_air_active which mvn
+(sin salida — mvn no encontrado en la imagen de runtime)
+
+$ docker exec eco_air_active find / -name "*.java" 2>/dev/null
+find: /root: Permission denied
+find: /proc/tty/driver: Permission denied
+(sin archivos .java encontrados)
+
+================================================================================
+
+--- RETO 3.1: Inducción del Colapso por Memoria (OOMKilled) ---
+
+$ docker run -d --name eco_air_crash -m 48m eco-air-backend:1.0.0
+a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+
+$ docker inspect eco_air_crash --format='Status: {{.State.Status}} | ExitCode: {{.State.ExitCode}} | OOMKilled: {{.State.OOMKilled}}'
+Status: exited | ExitCode: 137 | OOMKilled: true
+
+================================================================================
+
+--- RETO 3.2: Calibración del Límite Operativo Mínimo ---
+
+# Iteración 256m
+$ docker run -d --name eco_air_256 -m 256m eco-air-backend:1.0.0
+$ docker logs --timestamps eco_air_256 | grep "Started EcoAirApplication"
+2026-10-20T21:14:41.809060702Z INFO: Started EcoAirApplication in 7.094 seconds
+
+$ docker stats --no-stream eco_air_256
+CONTAINER ID   NAME          CPU %   MEM USAGE / LIMIT   MEM %
+79069888e453   eco_air_256   0.20%   195.2MiB / 256MiB   76.26%
+
+# Iteración 192m
+$ docker run -d --name eco_air_192 -m 192m eco-air-backend:1.0.0
+$ docker logs --timestamps eco_air_192 | grep "Started EcoAirApplication"
+2026-10-20T21:16:09.106964114Z INFO: Started EcoAirApplication in 11.378 seconds
+
+# Iteración 160m
+$ docker run -d --name eco_air_160 -m 160m eco-air-backend:1.0.0
+$ docker logs --timestamps eco_air_160 | grep "Started EcoAirApplication"
+2026-10-20T21:17:22.837267185Z INFO: Started EcoAirApplication in 10.743 seconds
+
+# Iteración 128m — UMBRAL MÍNIMO
+$ docker run -d --name eco_air_active2 -m 128m eco-air-backend:1.0.0
+$ docker logs --timestamps eco_air_active2 | grep "Started EcoAirApplication"
+2026-10-20T21:19:38.576594599Z INFO: Started EcoAirApplication in 13.639 seconds (process running for 14.429)
+
+================================================================================
+
+--- TABLA DE IDENTIDAD FINAL ---
+
+$ docker inspect --format='{{.Id}}' eco-air-backend:1.0.0
+sha256:128d483658e7f532ab86487fb87a7f250ef259770dd5f3d32ee7e7f69b4b6bb2
+
+$ docker exec eco_air_active env | grep OPERATOR_ID
+OPERATOR_ID=907839
+
+$ docker stats --no-stream eco_air_active
+CONTAINER ID   NAME             CPU %   MEM USAGE / LIMIT    MEM %   NET I/O         BLOCK I/O    PIDS
+3076c221abd4   eco_air_active   0.20%   290.2MiB / 7.57GiB   3.74%   2.05kB / 126B   0B / 741kB   52
+
+================================================================================
+END OF AUDIT SESSION
+================================================================================

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Taller Docker — eco-air-backend</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      font-size: 13px;
+      color: #1a1a1a;
+      background: #fff;
+      padding: 40px 60px;
+      line-height: 1.6;
+    }
+    h1 {
+      font-size: 22px;
+      color: #0d47a1;
+      border-bottom: 3px solid #0d47a1;
+      padding-bottom: 8px;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 30px;
+    }
+    h2 {
+      font-size: 16px;
+      color: #0d47a1;
+      border-left: 4px solid #0d47a1;
+      padding-left: 10px;
+      margin: 28px 0 10px 0;
+    }
+    h3 {
+      font-size: 14px;
+      color: #1565c0;
+      margin: 18px 0 6px 0;
+    }
+    p { margin-bottom: 10px; }
+    pre, code {
+      background: #f4f4f4;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 11.5px;
+    }
+    pre {
+      padding: 10px 14px;
+      margin: 8px 0 12px 0;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    code { padding: 1px 5px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 16px 0;
+      font-size: 12px;
+    }
+    th {
+      background: #0d47a1;
+      color: #fff;
+      padding: 7px 10px;
+      text-align: left;
+    }
+    td {
+      padding: 6px 10px;
+      border-bottom: 1px solid #ddd;
+    }
+    tr:nth-child(even) td { background: #f9f9f9; }
+    .badge-ok  { color: #2e7d32; font-weight: bold; }
+    .badge-err { color: #c62828; font-weight: bold; }
+    .info-box {
+      background: #e3f2fd;
+      border-left: 4px solid #1565c0;
+      padding: 10px 14px;
+      margin: 10px 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 12px;
+    }
+    .warn-box {
+      background: #fff3e0;
+      border-left: 4px solid #e65100;
+      padding: 10px 14px;
+      margin: 10px 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 12px;
+    }
+    .page-break { page-break-before: always; }
+    .header-meta {
+      display: flex;
+      justify-content: space-between;
+      background: #e8eaf6;
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin-bottom: 24px;
+      font-size: 12px;
+    }
+    .header-meta span { color: #333; }
+    .header-meta strong { color: #0d47a1; }
+    footer {
+      margin-top: 40px;
+      padding-top: 10px;
+      border-top: 1px solid #ccc;
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Taller Docker — eco-air-backend</h1>
+  <p class="subtitle">Contenerización, Seguridad de Runtime y Estrés de cgroups</p>
+
+  <div class="header-meta">
+    <span><strong>Integrantes:</strong> Johana Catalina Gaviria Moncayo &nbsp;|&nbsp; Julian Pedroza Ospina</span>
+    <span><strong>ID:</strong> 907839</span>
+  </div>
+  <div class="header-meta" style="margin-top:-14px;">
+    <span><strong>Proyecto:</strong> eco-air-backend</span>
+    <span><strong>Imagen:</strong> eco-air-backend:1.0.0</span>
+    <span><strong>Fecha:</strong> 2026-10-20</span>
+    <span><strong>Repositorio:</strong> <a href="https://github.com/johanagaviria19/TallerDocker.git" target="_blank">github.com/johanagaviria19/TallerDocker</a></span>
+  </div>
+
+  <!-- ===== INTRODUCCIÓN ===== -->
+  <h2>Introducción</h2>
+  <p>
+    El presente taller tiene como objetivo encapsular el backend <strong>eco-air-backend</strong>,
+    una aplicación Spring Boot que procesa alertas ambientales críticas, dentro de una imagen
+    Docker de producción: ligera, segura y con cuotas estrictas de hardware. Se abordan tres
+    retos principales: construcción multietapa con huella mínima, auditoría forense de seguridad
+    en runtime, y calibración de límites de memoria mediante cgroups.
+  </p>
+  <p>
+    El backend fue desarrollado con <strong>Spring Boot 3.2.5</strong>, <strong>Java 17</strong>,
+    base de datos H2 en memoria, Spring Data JPA y Spring Actuator. Expone endpoints REST en
+    <code>/api/alerts</code> para gestión de alertas ambientales (PM2.5, CO2, NO2).
+  </p>
+
+  <!-- ===== RETO 1 ===== -->
+  <h2>Reto 1 — Construcción Multietapa con Huella Estricta</h2>
+
+  <h3>Justificación del Dockerfile</h3>
+  <p>
+    Se implementó un Dockerfile de dos etapas para separar completamente el entorno de compilación
+    del entorno de ejecución. La estrategia de copiar <code>pom.xml</code> antes que <code>src/</code>
+    aprovecha el sistema de caché de capas de Docker: si solo cambia el código fuente, la capa de
+    descarga de dependencias se reutiliza, reduciendo tiempos de build.
+  </p>
+
+  <h3>Etapa 1 — builder</h3>
+  <p>Imagen base: <code>maven:3.9.6-eclipse-temurin-17-alpine</code></p>
+  <ul style="margin: 6px 0 10px 20px;">
+    <li>Se declara <code>ARG STUDENT_ID</code> para recibir el ID del estudiante en tiempo de construcción.</li>
+    <li>Se copia únicamente el <code>pom.xml</code> y se ejecuta <code>mvn dependency:go-offline -B</code> para preservar el caché de dependencias entre builds.</li>
+    <li>Se copia <code>src/</code> y se empaqueta con <code>mvn package -DskipTests -B</code>.</li>
+  </ul>
+
+  <h3>Etapa 2 — runtime</h3>
+  <p>Imagen base: <code>eclipse-temurin:17-jre-alpine</code> (solo JRE, sin JDK ni Maven)</p>
+  <ul style="margin: 6px 0 10px 20px;">
+    <li>Se crea el grupo <code>sensorgroup</code> y el usuario <code>sensor_user</code> con UID 10001.</li>
+    <li>Se configuran variables de entorno JVM con <code>-XX:+UseContainerSupport</code> y <code>-XX:MaxRAMPercentage=75.0</code>.</li>
+    <li>Se establece <code>ENV OPERATOR_ID=907839</code> inyectado desde el <code>ARG STUDENT_ID</code>.</li>
+    <li>Se copia únicamente el <code>.jar</code> y se asigna la propiedad del directorio <code>/app</code> a <code>sensor_user</code>.</li>
+    <li>Se cambia al usuario <code>sensor_user</code> antes del <code>ENTRYPOINT</code>.</li>
+  </ul>
+
+  <h3>Comando de construcción</h3>
+  <pre>docker build --build-arg STUDENT_ID="907839" -t eco-air-backend:1.0.0 .</pre>
+
+  <h3>Resultado</h3>
+  <table>
+    <tr><th>Campo</th><th>Valor</th></tr>
+    <tr><td>Estado del build</td><td><span class="badge-ok">BUILD SUCCESS</span></td></tr>
+    <tr><td>Tamaño de la imagen</td><td>453 MB</td></tr>
+    <tr><td>IMAGE ID</td><td>128d483658e7</td></tr>
+    <tr><td>Hash completo</td><td style="font-size:10px">sha256:128d483658e7f532ab86487fb87a7f250ef259770dd5f3d32ee7e7f69b4b6bb2</td></tr>
+    <tr><td>OPERATOR_ID inyectado</td><td><code>OPERATOR_ID=907839</code></td></tr>
+  </table>
+
+  <!-- ===== RETO 2 ===== -->
+  <div class="page-break"></div>
+  <h2>Reto 2 — Auditoría Forense y Comprobación de Vulnerabilidades</h2>
+
+  <h3>2.1 Verificación del Desacoplamiento de Capas</h3>
+  <pre>docker history --human --format "table {{.Size}}\t{{.CreatedBy}}" eco-air-backend:1.0.0</pre>
+  <pre>SIZE      CREATED BY
+0B        ENTRYPOINT ["sh" "-c" "java $JAVA_OPTS -jar /app/eco-air-backend.jar"]
+0B        EXPOSE [8080/tcp]
+0B        USER sensor_user
+49.5MB    RUN chown -R sensor_user:sensorgroup /app
+49.5MB    COPY /build/target/eco-air-backend.jar ./eco-air-backend.jar
+8.19kB    WORKDIR /app
+0B        ENV OPERATOR_ID=907839
+0B        ENV JAVA_OPTS=-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 ...
+41kB      RUN addgroup -S sensorgroup &amp;&amp; adduser -S -u 10001 -G sensorgroup sensor_user
+0B        ARG STUDENT_ID=907839
+141MB     RUN (JRE base layer — eclipse-temurin)
+44MB      RUN apk add --no-cache (Alpine packages)
+9.08MB    ADD alpine-minirootfs-3.24.2-x86_64.tar.gz /</pre>
+
+  <div class="info-box">
+    <strong>Análisis:</strong> Cada instrucción del Dockerfile genera una capa independiente. La separación
+    entre la descarga de dependencias y la compilación permite reutilizar el caché de la capa de dependencias
+    cuando solo cambia el código fuente, optimizando los tiempos de build subsecuentes.
+  </div>
+
+  <h3>2.2 Inspección del Proceso del Host — Aislamiento de Privilegios</h3>
+  <pre>docker run -d --name eco_air_active -p 8080:8080 eco-air-backend:1.0.0
+docker top eco_air_active -o pid,user,comm</pre>
+  <pre>PID     USER    COMMAND
+959     10001   java</pre>
+
+  <div class="info-box">
+    <strong>Evidencia:</strong> El proceso <code>java</code> corre bajo el UID <strong>10001</strong>
+    (sensor_user), no como <code>root</code> (UID 0). Esto confirma el aislamiento de privilegios
+    configurado con <code>USER sensor_user</code> en el Dockerfile.
+  </div>
+
+  <h3>2.3 Test de Penetración — Comprobación de Inmutabilidad de Runtime</h3>
+  <pre>docker exec eco_air_active touch /etc/crontab_fake</pre>
+  <pre>touch: cannot touch '/etc/crontab_fake': Permission denied</pre>
+
+  <div class="info-box">
+    <strong>Evidencia:</strong> El usuario <code>sensor_user</code> (UID 10001) no tiene permisos de escritura
+    sobre directorios del sistema como <code>/etc</code>. El intento de inyectar un script malicioso fue bloqueado
+    por el sistema operativo, validando el principio de mínimo privilegio.
+  </div>
+
+  <h3>2.4 Auditoría de Artefactos de Desarrollo</h3>
+  <pre>docker exec eco_air_active which mvn
+(sin salida — comando no encontrado)
+
+docker exec eco_air_active find / -name "*.java" 2>/dev/null
+find: /root: Permission denied
+find: /proc/tty/driver: Permission denied
+(sin archivos .java encontrados)</pre>
+
+  <div class="info-box">
+    <strong>Explicación:</strong> Gracias al build multietapa, la imagen de runtime <strong>no contiene</strong>
+    Maven, el JDK ni ningún archivo <code>.java</code> del código fuente. Solo se copió el artefacto
+    <code>.jar</code> compilado desde la etapa <code>builder</code>. Esto reduce drásticamente la superficie
+    de ataque al eliminar todas las herramientas de desarrollo de la imagen de producción.
+  </div>
+
+  <!-- ===== RETO 3 ===== -->
+  <div class="page-break"></div>
+  <h2>Reto 3 — Calibración de cgroups y Captura del Asesino OOM</h2>
+
+  <h3>3.1 Inducción del Colapso por Memoria (OOMKilled)</h3>
+  <pre>docker run -d --name eco_air_crash -m 48m eco-air-backend:1.0.0
+docker inspect eco_air_crash --format='Status: {{.State.Status}} | ExitCode: {{.State.ExitCode}} | OOMKilled: {{.State.OOMKilled}}'</pre>
+  <pre>Status: exited | ExitCode: 137 | OOMKilled: true</pre>
+
+  <div class="warn-box">
+    <strong>Explicación:</strong> Con solo 48 MB asignados, la JVM no puede reservar el heap mínimo
+    necesario para inicializar Spring Boot con Hibernate. El kernel Linux detecta que el proceso excede
+    el límite del cgroup y lo termina con <strong>SIGKILL</strong> (señal 9 = ExitCode 137).
+    El campo <code>OOMKilled: true</code> confirma que fue el OOM Killer del kernel quien terminó el proceso.
+  </div>
+
+  <h3>3.2 Calibración del Límite Operativo Mínimo</h3>
+  <table>
+    <tr>
+      <th>Memoria</th>
+      <th>Estado</th>
+      <th>Tiempo de arranque</th>
+      <th>OOMKilled</th>
+      <th>Cumple &lt; 15s</th>
+    </tr>
+    <tr>
+      <td>48m</td>
+      <td><span class="badge-err">exited</span></td>
+      <td>—</td>
+      <td><span class="badge-err">true</span></td>
+      <td><span class="badge-err">❌</span></td>
+    </tr>
+    <tr>
+      <td><strong>128m ← umbral mínimo</strong></td>
+      <td><span class="badge-ok">running</span></td>
+      <td><strong>13.63s</strong></td>
+      <td><span class="badge-ok">false</span></td>
+      <td><span class="badge-ok">✅</span></td>
+    </tr>
+    <tr>
+      <td>160m</td>
+      <td><span class="badge-ok">running</span></td>
+      <td>10.74s</td>
+      <td><span class="badge-ok">false</span></td>
+      <td><span class="badge-ok">✅</span></td>
+    </tr>
+    <tr>
+      <td>192m</td>
+      <td><span class="badge-ok">running</span></td>
+      <td>11.37s</td>
+      <td><span class="badge-ok">false</span></td>
+      <td><span class="badge-ok">✅</span></td>
+    </tr>
+    <tr>
+      <td>256m</td>
+      <td><span class="badge-ok">running</span></td>
+      <td>7.09s</td>
+      <td><span class="badge-ok">false</span></td>
+      <td><span class="badge-ok">✅</span></td>
+    </tr>
+  </table>
+
+  <h3>Log de confirmación — Umbral mínimo 128m</h3>
+  <pre>docker logs --timestamps eco_air_active | grep "Started EcoAirApplication"
+
+2026-10-20T21:19:38.576594599Z  INFO 1 --- [eco-air-backend] [main]
+com.ecoair.backend.EcoAirApplication : Started EcoAirApplication
+in 13.639 seconds (process running for 14.429)</pre>
+
+  <h3>3.3 Profiling de Memoria en Caliente — docker stats</h3>
+  <pre>docker stats --no-stream eco_air_active</pre>
+  <pre>CONTAINER ID   NAME             CPU %   MEM USAGE / LIMIT    MEM %   NET I/O         BLOCK I/O    PIDS
+3076c221abd4   eco_air_active   0.20%   290.2MiB / 7.57GiB   3.74%   2.05kB / 126B   0B / 741kB   52</pre>
+
+  <!-- ===== TABLA DE IDENTIDAD FINAL ===== -->
+  <div class="page-break"></div>
+  <h2>Tabla de Identidad Final</h2>
+  <table>
+    <tr><th>Campo</th><th>Comando</th><th>Valor</th></tr>
+    <tr>
+      <td>Hash de la imagen</td>
+      <td><code>docker inspect --format='{{.Id}}' eco-air-backend:1.0.0</code></td>
+      <td style="font-size:10px">sha256:128d483658e7f532ab86487fb87a7f250ef259770dd5f3d32ee7e7f69b4b6bb2</td>
+    </tr>
+    <tr>
+      <td>Variable OPERATOR_ID</td>
+      <td><code>docker exec eco_air_active env | grep OPERATOR_ID</code></td>
+      <td><code>OPERATOR_ID=907839</code></td>
+    </tr>
+    <tr>
+      <td>Consumo final calibrado</td>
+      <td><code>docker stats --no-stream eco_air_active</code></td>
+      <td>290.2MiB / 7.57GiB — 3.74% CPU: 0.20%</td>
+    </tr>
+  </table>
+
+  <!-- ===== RESUMEN ===== -->
+  <h2>Resumen de Evidencias</h2>
+  <table>
+    <tr><th>Reto</th><th>Prueba</th><th>Resultado</th></tr>
+    <tr><td>R1</td><td>Build multietapa con STUDENT_ID=907839</td><td><span class="badge-ok">✅ BUILD SUCCESS</span></td></tr>
+    <tr><td>R2.1</td><td>Desacoplamiento de capas visible en docker history</td><td><span class="badge-ok">✅ Capas separadas</span></td></tr>
+    <tr><td>R2.2</td><td>Proceso java no corre como root</td><td><span class="badge-ok">✅ UID 10001 (sensor_user)</span></td></tr>
+    <tr><td>R2.3</td><td>Escritura en /etc bloqueada</td><td><span class="badge-ok">✅ Permission denied</span></td></tr>
+    <tr><td>R2.4</td><td>Maven y archivos .java ausentes en runtime</td><td><span class="badge-ok">✅ No encontrados</span></td></tr>
+    <tr><td>R3.1</td><td>OOMKilled con 48m</td><td><span class="badge-ok">✅ OOMKilled: true / ExitCode: 137</span></td></tr>
+    <tr><td>R3.2</td><td>Umbral mínimo operativo encontrado</td><td><span class="badge-ok">✅ 128m — arranca en 13.6s</span></td></tr>
+  </table>
+
+  <footer>
+    Taller Docker — Contenerización, Seguridad de Runtime y Estrés de cgroups &nbsp;|&nbsp;
+    Johana Catalina Gaviria Moncayo &nbsp;·&nbsp; Julian Pedroza Ospina &nbsp;|&nbsp; ID: 907839 &nbsp;|&nbsp;
+    <a href="https://github.com/johanagaviria19/TallerDocker.git">github.com/johanagaviria19/TallerDocker</a>
+  </footer>
+
+</body>
+</html>

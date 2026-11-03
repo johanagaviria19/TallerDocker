@@ -1,0 +1,51 @@
+# -------------------------------------------------------
+# eco-air-backend — Stack de producción con Docker Compose
+# Servicios: backend (Spring Boot) + db (PostgreSQL)
+# -------------------------------------------------------
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    container_name: eco_air_db
+    environment:
+      POSTGRES_DB: ecoair
+      POSTGRES_USER: ecoair_user
+      POSTGRES_PASSWORD: ecoair_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecoair_user -d ecoair"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./eco-air-backend
+      args:
+        STUDENT_ID: "907839"
+    image: eco-air-backend:1.0.0
+    container_name: eco_air_active
+    ports:
+      - "8080:8080"
+    environment:
+      # Sobreescribe application.properties en runtime → apunta a PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/ecoair
+      SPRING_DATASOURCE_USERNAME: ecoair_user
+      SPRING_DATASOURCE_PASSWORD: ecoair_pass
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      # Desactivar H2 console cuando se usa PostgreSQL
+      SPRING_H2_CONSOLE_ENABLED: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          # Umbral mínimo calibrado en Reto 3: 128m mínimo, 256m estable
+          memory: 256m
+
+volumes:
+  postgres_data:
